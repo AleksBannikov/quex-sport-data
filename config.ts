@@ -1,4 +1,4 @@
-{
+export default {
     "chain": {
         "rpc_url": "https://sepolia-rollup.arbitrum.io/rpc"
     },
@@ -13,6 +13,6 @@
     "request_file": "request.json",
     "gas_limit": 700000,
     "td_pubkey": "0xd54a40ed58733b4aa39fd819b51656ab0812c825280216580ba0fd0ffbfd655074d63410e510885ec7966bfa85f5ba76f9641380ce3d8b7cc6ac2bffbc1f7fd6",
-    "consumer": "0x9018A16F8574d663E0E9AA62EAe6009d4DAbec1f",
+    "consumer": process.env.CONSUMER_ADDRESS || "",
     "callback": "0x8f0b0698"
 }

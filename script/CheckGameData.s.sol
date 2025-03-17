@@ -13,7 +13,7 @@ contract CheckGameDataScript is Script {
         vm.createSelectFork("arbitrum-sepolia");
 
         // Get parameters from environment
-        uint256 privateKey = vm.envUint("SECRET");
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address payable contractAddress = payable(vm.envAddress("CONTRACT_ADDRESS"));
         
         // Log information

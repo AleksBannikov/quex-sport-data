@@ -15,15 +15,18 @@ contract RequestScript is Script {
     function run() external {
         vm.createSelectFork("arbitrum-sepolia");
 
-        // Get parameters from environment
-        uint256 privateKey = vm.envUint("SECRET");
-        address payable contractAddress = payable(vm.envAddress("CONTRACT_ADDRESS"));
+        // Get deployer credentials
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(privateKey);
+        
+        // Get contract address from environment
+        address payable contractAddress = payable(vm.envAddress("CONSUMER_ADDRESS"));
         
         // Log information about the request
         console.log("\n=== Sending Request to Soccer Game Oracle ===\n");
         console.log("Contract address: %s", contractAddress);
         console.log("Oracle fee: %d wei (%f ETH)", ORACLE_FEE, ORACLE_FEE / 1e18);
-        console.log("Sender address: %s", vm.addr(privateKey));
+        console.log("Sender address: %s", deployer);
 
         // Check the flow ID first to ensure we have an active flow
         vm.startBroadcast(privateKey);
@@ -38,7 +41,7 @@ contract RequestScript is Script {
             console.log("\nUsing flow ID: %d", flowId);
             
             // Send the request with the oracle fee
-            try GameDataReceiver(payable(contractAddress)).request{value: ORACLE_FEE}() returns (uint256 requestId) {
+            try GameDataReceiver(contractAddress).request{value: ORACLE_FEE}() returns (uint256 requestId) {
                 console.log("Request sent successfully!");
                 console.log("Request ID: %d\n", requestId);
                 console.log("The oracle will now fetch the data from SportsData.io");

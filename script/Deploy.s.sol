@@ -8,7 +8,7 @@ import "../contracts/GameDataReceiver.sol";
  * @title DeployGameDataReceiverScript
  * @dev Script to deploy the GameDataReceiver contract to Arbitrum Sepolia
  */
-contract DeployGameDataReceiverScript is Script {
+contract Deploy is Script {
     // Quex contract addresses on Arbitrum Sepolia
     address private constant QUEX_CORE = 0xD8a37e96117816D43949e72B90F73061A868b387;
     address private constant ORACLE_POOL = 0x957E16D5bfa78799d79b86bBb84b3Ca34D986439;
@@ -18,7 +18,7 @@ contract DeployGameDataReceiverScript is Script {
         vm.createSelectFork("arbitrum-sepolia");
 
         // Get deployer credentials
-        uint256 privateKey = vm.envUint("SECRET");
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(privateKey);
         
         // Log deployment information

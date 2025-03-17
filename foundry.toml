@@ -2,6 +2,10 @@
 src = "contracts"
 out = "out"
 libs = ["lib"]
+cbor_metadata = true
 
 [rpc_endpoints]
 arbitrum-sepolia = "https://sepolia-rollup.arbitrum.io/rpc"
+
+[etherscan]
+arbitrum-sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api-sepolia.arbiscan.io/api" }

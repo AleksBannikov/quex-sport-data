@@ -1,79 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {console} from "forge-std/console.sol";
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
+import "./QuexRequestManager.sol";
 import "quex-v1-interfaces/interfaces/oracles/IRequestOraclePool.sol";
-import "quex-v1-interfaces/interfaces/core/IFlowRegistry.sol";
-import "quex-v1-interfaces/interfaces/core/IQuexActionRegistry.sol";
-
-/**
- * @title QuexRequestManager
- * @dev Base contract for managing interactions with Quex data oracles.
- */
-abstract contract QuexRequestManager is Ownable {
-
-    // Quex integration variables
-    address public immutable quexCore;
-    uint256 internal _requestId;
-    uint256 internal _flowId;
-
-    // Using IdType enum from IQuexActionRegistry
-
-    /**
-     * @dev Initializes the contract with the Quex Core address
-     * @param quexCoreAddress Address of the Quex Flow Registry contract
-     */
-    constructor(address quexCoreAddress) Ownable(msg.sender) {
-        quexCore = quexCoreAddress;
-    }
-
-    /**
-     * @notice Retrieves the flow ID
-     * @return The flow ID of the contract
-     */
-    function getFlowId() external view returns (uint256) {
-        return _flowId;
-    }
-
-    /**
-     * @notice Sets the flow ID (can only be set once)
-     * @param flowId The unique identifier for the flow
-     */
-    function setFlowId(uint256 flowId) public virtual onlyOwner {
-        require(_flowId == 0, "Flow ID is already set");
-        _flowId = flowId;
-    }
-
-    /**
-     * @notice Performs validation checks for an incoming response
-     * @param receivedRequestId The ID of the request associated with this response
-     */
-    modifier verifyResponse(uint256 receivedRequestId, IdType idType) {
-        require(msg.sender == quexCore, "Only Quex can push data");
-        require(receivedRequestId == _requestId, "Unknown request ID");
-        require(idType == IdType.RequestId, "Return type mismatch");
-        _;
-    }
-
-    /**
-     * @notice Sends a request to the Quex Action Registry
-     * @return The request ID of the newly created request
-     */
-    function sendRequest() public payable virtual onlyOwner returns (uint256) {
-        require(_flowId != 0, "Flow ID is not set");
-        _requestId = IQuexActionRegistry(quexCore).createRequest{value: msg.value}(_flowId);
-        return _requestId;
-    }
-
-    /**
-     * @notice Handles refunds if excess payment was made during a request
-     */
-    receive() external payable virtual {
-        (bool success,) = payable(owner()).call{value: msg.value}("");
-        require(success, "Transfer failed");
-    }
-}
 
 /**
  * @title GameDataReceiver
@@ -126,13 +55,12 @@ contract GameDataReceiver is QuexRequestManager {
     );
 
     /**
-     * @dev Initializes the contract and creates the flow for soccer game data
+     * @dev Initializes the contract with required addresses. Flow must be created post-deployment using create-flow.ts script.
      * @param quexCoreAddress Address of the Quex Flow Registry contract
      * @param oraclePoolAddress Address of the Request Oracle Pool contract
      */
     constructor(address quexCoreAddress, address oraclePoolAddress) QuexRequestManager(quexCoreAddress) {
         _oraclePool = oraclePoolAddress;
-        // Flow will be created after deployment via the create-flow.js script
     }
     
     /**
@@ -144,107 +72,6 @@ contract GameDataReceiver is QuexRequestManager {
         // Since this function overrides the base one which also has onlyOwner,
         // we're already ensuring proper authorization
         super.setFlowId(flowId);
-    }
-    
-    /**
-     * @notice Creates the default flow for soccer game data using the current date
-     */
-    function createDefaultFlow() private {
-        createGameDataFlow("2024-02-26"); // Default date for the example
-    }
-
-    /**
-     * @notice Creates a new flow to fetch soccer game data
-     * @param date The date to fetch games for in format YYYY-MM-DD
-     */
-    function createGameDataFlow(string memory date) public onlyOwner {
-        IRequestOraclePool oracleInstance = IRequestOraclePool(_oraclePool);
-        IFlowRegistry flowRegistry = IFlowRegistry(quexCore);
-
-        // Create the request and patch objects from the SportsData.io API
-        (HTTPRequest memory httpRequest, HTTPPrivatePatch memory patch) = createMatchRequest(date);
-        
-        // Add the request and patch to the oracle pool
-        bytes32 requestId = oracleInstance.addRequest(httpRequest);
-        bytes32 patchId = oracleInstance.addPrivatePatch(patch);
-        
-        // Add the schema and filter definitions
-        bytes32 schemaId = oracleInstance.addResponseSchema(
-            "(uint256,uint256,uint256,uint256,uint256,(uint256,uint256,uint256)[])" // Tuple schema
-        );
-        
-        bytes32 filterId = oracleInstance.addJqFilter(
-            ".[0] | [.Game.GameId, .Game.HomeTeamId, .Game.AwayTeamId, .Game.HomeTeamScore, .Game.AwayTeamScore, (.Goals | map([.GameMinute, .GameMinuteExtra, .TeamId]))]" 
-        );
-        
-        // Create action by combining request, patch, schema, and filter
-        uint256 actionId = oracleInstance.addActionByParts(
-            requestId,
-            patchId,
-            schemaId,
-            filterId
-        );
-        
-        // Create flow with the action
-        Flow memory flow = Flow({
-            gasLimit: GAS_LIMIT,
-            actionId: actionId,
-            pool: _oraclePool,
-            consumer: address(this),
-            callback: this.processGameData.selector
-        });
-        
-        // Register the flow and save its ID
-        uint256 newFlowId = flowRegistry.createFlow(flow);
-        _flowId = newFlowId; // Set directly since we're in the constructor context
-    }
-    
-    /**
-     * @notice Creates the HTTP request for match data from SportsData.io
-     * @param date The date to fetch games for in format YYYY-MM-DD
-     * @return httpRequest The HTTP request structure
-     * @return patch The patch structure containing the API key
-     */
-    function createMatchRequest(string memory date) private pure returns (
-        HTTPRequest memory httpRequest,
-        HTTPPrivatePatch memory patch
-    ) {
-        // Create the path for the SportsData.io API
-        string memory path = string(abi.encodePacked(
-            "/api/v4/soccer/stats/json/boxscoresbydate/mls/",
-            date
-        ));
-        
-        // Create HTTP request
-        httpRequest = HTTPRequest({
-            method: RequestMethod.Get,
-            host: "replay.sportsdata.io",
-            path: path,
-            headers: new RequestHeader[](0),
-            parameters: new QueryParameter[](0),
-            body: ""
-        });
-        
-        // Create patch with API key as parameter
-        // Convert the API key to a QueryParameterPatch
-        QueryParameterPatch[] memory paramPatches = new QueryParameterPatch[](1);
-        paramPatches[0] = QueryParameterPatch({
-            key: "key",
-            ciphertext: bytes("42a9cf0677694e06bf6ab26cce74988c") // API key as bytes
-        });
-        
-        // Derive TD address from the public key provided
-        // The actual TD pubkey is: 0xb23974e9267308bd821c34038e00072bf1e297f308227d98de387deb50f9ca2ebed328af1471f291e53eff602130f5ab79d006ee040553016775d79261362770
-        // For simplicity, we'll use the address directly
-        address tdAddress = 0xA4b1FE1C27E1FF55A42fd431Dd5A50F65a5BFF45; // Derived from public key
-        
-        patch = HTTPPrivatePatch({
-            pathSuffix: "",
-            headers: new RequestHeaderPatch[](0),
-            parameters: paramPatches,
-            body: "",
-            tdAddress: tdAddress // TD address derived from pubkey
-        });
     }
     
     /**
