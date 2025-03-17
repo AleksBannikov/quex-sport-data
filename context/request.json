@@ -1,0 +1,23 @@
+{
+    "request": {
+        "method": "GET",
+        "host": "replay.sportsdata.io",
+        "path": "/api/v4/soccer/stats/json/boxscoresbydate/mls/2024-02-26",
+        "headers": [],
+        "body": "",
+        "parameters": []
+    },
+    "jqFilter": ".[0] | [.Game.GameId, .Game.HomeTeamId, .Game.AwayTeamId, .Game.HomeTeamScore, .Game.AwayTeamScore, (.Goals | map([.GameMinute, .GameMinuteExtra, .TeamId]))]",
+    "responseSchema": "(uint256,uint256,uint256,uint256,uint256,(uint256,uint256,uint256)[])",
+    "patch": {
+        "pathSuffix": "",
+        "headers": [],
+        "parameters": [
+            {
+                "key": "key",
+                "value": "42a9cf0677694e06bf6ab26cce74988c"
+            }
+        ],
+        "body": ""
+    }
+}
