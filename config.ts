@@ -12,7 +12,7 @@ export default {
     },
     "request_file": "request.json",
     "gas_limit": 700000,
-    "td_pubkey": "0xd54a40ed58733b4aa39fd819b51656ab0812c825280216580ba0fd0ffbfd655074d63410e510885ec7966bfa85f5ba76f9641380ce3d8b7cc6ac2bffbc1f7fd6",
+    "td_pubkey": "0xb23974e9267308bd821c34038e00072bf1e297f308227d98de387deb50f9ca2ebed328af1471f291e53eff602130f5ab79d006ee040553016775d79261362770",
     "consumer": process.env.CONSUMER_ADDRESS || "",
     "callback": "0x8f0b0698"
 }

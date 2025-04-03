@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import "./QuexRequestManager.sol";
-import "quex-v1-interfaces/interfaces/oracles/IRequestOraclePool.sol";
+import "quex-v1-interfaces/src/libraries/QuexRequestManager.sol";
+
+using FlowBuilder for FlowBuilder.FlowConfig;
 
 /**
  * @title GameDataReceiver
@@ -14,7 +15,10 @@ contract GameDataReceiver is QuexRequestManager {
     uint256 private constant GAS_LIMIT = 700000;
     
     // Quex integration variables
-    address private immutable _oraclePool;
+    address private immutable _quexCoreAddress;
+    address private immutable _oraclePoolAddress;
+
+    bytes private _encryptedApiKey;
     
     // Game data storage
     struct Goal {
@@ -46,7 +50,7 @@ contract GameDataReceiver is QuexRequestManager {
         uint256 awayScore,
         uint256 timestamp
     );
-    event RequestSent(uint256 requestId);
+    event RequestSent(string date, uint256 requestId);
     event GoalScored(
         uint256 indexed gameId,
         uint256 minute,
@@ -60,7 +64,8 @@ contract GameDataReceiver is QuexRequestManager {
      * @param oraclePoolAddress Address of the Request Oracle Pool contract
      */
     constructor(address quexCoreAddress, address oraclePoolAddress) QuexRequestManager(quexCoreAddress) {
-        _oraclePool = oraclePoolAddress;
+        _quexCoreAddress = quexCoreAddress;
+        _oraclePoolAddress = oraclePoolAddress;
     }
     
     /**
@@ -75,13 +80,14 @@ contract GameDataReceiver is QuexRequestManager {
     }
     
     /**
-     * @notice Sends a request to get game data
+     * @notice Sends a request to get game data for particular date
+     * @param date The date for which game results should be requested
      * @return The request ID of the newly created request
      */
-    function request() public payable onlyOwner returns (uint256) {
-        require(_flowId != 0, "Flow ID is not set");
-        _requestId = IQuexActionRegistry(quexCore).createRequest{value: msg.value}(_flowId);
-        emit RequestSent(_requestId);
+    function request(string memory date) public payable onlyOwner returns (uint256) {
+        uint256 flowId = _createFlow(date);
+        _requestId = quexCore.createRequest{value: msg.value}(flowId);
+        emit RequestSent(date, _requestId);
         return _requestId;
     }
     
@@ -163,6 +169,15 @@ contract GameDataReceiver is QuexRequestManager {
             block.timestamp
         );
     }
+
+
+    /**
+     * @notice Sets sportsdata.io API key
+     * @param encryptedApiKey API key for sportsdata.io encrypted with oracle pool's key
+     */
+    function setApiKey(bytes memory encryptedApiKey) external onlyOwner {
+        _encryptedApiKey = encryptedApiKey;
+    }
     
     /**
      * @notice Gets the result of a game
@@ -189,6 +204,24 @@ contract GameDataReceiver is QuexRequestManager {
      * @return The address of the oracle pool
      */
     function getOraclePool() external view returns (address) {
-        return _oraclePool;
+        return _oraclePoolAddress;
+    }
+
+    /**
+     * @notice Creates flow for requesting data for particular date
+     * @param date The date for which game results should be requested
+     * @return The flow ID of the newly created flow
+     */
+    function _createFlow(string memory date) private returns (uint256) {
+        string memory path = string.concat("api/v4/soccer/stats/json/boxscoresbydate/mls/", date);
+        FlowBuilder.FlowConfig memory config = FlowBuilder.create(_quexCoreAddress, _oraclePoolAddress, "replay.sportsdata.io", path)
+            .withCallback(address(this), this.processGameData.selector)
+            .withFilter(".[0] | [.Game.GameId, .Game.HomeTeamId, .Game.AwayTeamId, .Game.HomeTeamScore, .Game.AwayTeamScore, (.Goals | map([.GameMinute, .GameMinuteExtra, .TeamId]))]")
+            .withSchema("(uint256,uint256,uint256,uint256,uint256,(uint256,uint256,uint256)[])");
+        QueryParameterPatch[] memory parametersPatch = new QueryParameterPatch[](1);
+        parametersPatch[0] = QueryParameterPatch("key", _encryptedApiKey);
+        config.patch.parameters = parametersPatch; // TODO: Move to FlowBuilder
+        config.gasLimit = GAS_LIMIT;
+        return config.build();
     }
 }
