@@ -39,7 +39,6 @@ contract GameDataReceiver is QuexRequestManager {
     
     mapping(uint256 => GameResult) public games;
     mapping(uint256 => bool) public processedGameIds;
-    uint256 public gameCount;
     
     // Events
     event GameDataReceived(
@@ -134,19 +133,17 @@ contract GameDataReceiver is QuexRequestManager {
         uint256 awayScore,
         Goal[] memory goals
     ) private {
-        uint256 newGameId = gameCount++;
-        
         // Create a new storage array for goals
-        games[newGameId].gameId = gameId;
-        games[newGameId].homeTeamId = homeTeamId;
-        games[newGameId].awayTeamId = awayTeamId;
-        games[newGameId].homeScore = homeScore;
-        games[newGameId].awayScore = awayScore;
-        games[newGameId].timestamp = block.timestamp;
+        games[gameId].gameId = gameId;
+        games[gameId].homeTeamId = homeTeamId;
+        games[gameId].awayTeamId = awayTeamId;
+        games[gameId].homeScore = homeScore;
+        games[gameId].awayScore = awayScore;
+        games[gameId].timestamp = block.timestamp;
         
         // Store each goal
         for (uint256 i = 0; i < goals.length; i++) {
-            games[newGameId].goals.push(Goal({
+            games[gameId].goals.push(Goal({
                 minute: goals[i].minute,
                 extraMinute: goals[i].extraMinute,
                 teamId: goals[i].teamId
@@ -185,8 +182,9 @@ contract GameDataReceiver is QuexRequestManager {
      * @return The game result
      */
     function getGameResult(uint256 gameId) external view returns (GameResult memory) {
-        require(gameId < gameCount, "Game does not exist");
-        return games[gameId];
+        GameResult memory game = games[gameId];
+        require(game.gameId != 0, "Game does not exist");
+        return game;
     }
     
     /**
@@ -195,8 +193,9 @@ contract GameDataReceiver is QuexRequestManager {
      * @return Array of goals for the game
      */
     function getGameGoals(uint256 gameId) external view returns (Goal[] memory) {
-        require(gameId < gameCount, "Game does not exist");
-        return games[gameId].goals;
+        GameResult memory game = games[gameId];
+        require(game.gameId != 0, "Game does not exist");
+        return game.goals;
     }
     
     /**
